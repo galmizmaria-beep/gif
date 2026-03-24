@@ -3,230 +3,206 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video to Transparent GIF (Base64 Fix)</title>
-    
-    <!-- Подключаем ИИ от Google (MediaPipe) с фиксированной версией, чтобы избежать 404 -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1/selfie_segmentation.js" crossorigin="anonymous"></script>
-    
-    <!-- Подключаем библиотеку для создания GIF -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
-
+    <title>Видео в прозрачную GIF для Genially</title>
+    <!-- Подключаем библиотеку для создания GIF прямо в браузере -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gifshot/0.3.2/gifshot.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; color: #333; text-align: center; padding: 20px; }
-        .container { max-width: 700px; margin: 0 auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        h1 { font-size: 24px; margin-bottom: 20px; }
-        .file-upload { margin: 20px 0; }
-        /* Шахматный фон, чтобы было видно прозрачность */
-        video, canvas, img { max-width: 100%; border-radius: 8px; margin-top: 15px; background: url('https://i.imgur.com/3q14i0J.png'); }
-        button { background: #4CAF50; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; margin: 10px 5px; transition: 0.3s; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 700px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        h2 { text-align: center; color: #2c3e50; }
+        .step { margin-bottom: 25px; padding: 15px; border-radius: 8px; background: #fafafa; border: 1px solid #eee; }
+        input[type="file"] { display: block; margin-top: 10px; }
+        .slider-container { margin-top: 15px; }
+        button { background: #007bff; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%; transition: 0.2s; }
+        button:hover { background: #0056b3; }
         button:disabled { background: #ccc; cursor: not-allowed; }
-        button:hover:not(:disabled) { background: #45a049; }
-        textarea { width: 100%; height: 120px; margin-top: 10px; padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-family: monospace; resize: vertical; font-size: 12px; }
-        #loading { display: none; color: #ff5722; font-weight: bold; margin: 15px 0; }
-        #systemStatus { font-size: 14px; color: #ff9800; font-weight: bold; margin-bottom: 10px; }
+        #status { text-align: center; margin-top: 10px; font-weight: bold; color: #ff8c00; display: none; }
+        textarea { width: 100%; height: 120px; margin-top: 10px; border-radius: 6px; border: 1px solid #ccc; padding: 10px; font-family: monospace; font-size: 12px; resize: vertical; box-sizing: border-box;}
+        .preview-area { text-align: center; margin-top: 15px; background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAOklEQVQYV2NkYGAwYcANmMgTjP///yMwMSx//x7D8B1DAzIluMyiSgGGRmRKYIqjkUUj0x2MgvEwEABiYxoR3t7X6QAAAABJRU5ErkJggg=='); border-radius: 8px; border: 1px solid #ddd; min-height: 150px; display: flex; align-items: center; justify-content: center; overflow: hidden;}
+        #gifResult { max-width: 100%; }
+        .alert { font-size: 12px; color: #666; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🎬 Конвертер: Видео ➡️ Прозрачная GIF ➡️ Genially</h1>
-    
-    <div id="systemStatus">⚙️ Подготовка системы... Пожалуйста, подождите.</div>
+    <h2>Создание прозрачной GIF</h2>
 
-    <div class="file-upload">
-        <label>Выберите видео (до 5-10 секунд):</label><br><br>
-        <input type="file" id="videoUpload" accept="video/mp4,video/webm,video/quicktime" disabled>
+    <div class="step">
+        <h3>1. Загрузите видео</h3>
+        <input type="file" id="videoInput" accept="video/mp4,video/webm,video/mov">
+        <p class="alert">* Желательно снимать на однородном фоне (зеленый/синий/белый). Рекомендуемая длина: до 5-7 секунд.</p>
+        
+        <div class="slider-container">
+            <label for="tolerance">Сила удаления фона: <span id="tolValue">50</span></label><br>
+            <input type="range" id="tolerance" min="10" max="150" value="50" style="width: 100%;">
+        </div>
     </div>
 
-    <video id="sourceVideo" controls style="display:none;"></video>
-    <canvas id="canvas" style="display:none;"></canvas>
-    
-    <p id="loading">⏳ Идет нейросетевая обработка и создание GIF... Это может занять пару минут.</p>
-
-    <!-- Готовая гифка -->
-    <img id="resultGif" style="display:none;" alt="Готовая прозрачная GIF">
-
-    <div id="actionButtons" style="display:none;">
-        <button id="processBtn">1. Удалить фон и сделать GIF</button>
-        <button id="downloadBtn" style="display:none;">2. Скачать GIF</button>
-        <button id="geniallyBtn" style="display:none;">3. Получить Base64-код для Genially</button>
+    <div class="step">
+        <button id="processBtn">Обработать и создать GIF</button>
+        <div id="status">Обработка... Извлекаем кадры и удаляем фон...</div>
     </div>
 
-    <div id="embedSection" style="display:none; text-align: left; margin-top: 20px;">
-        <b>Скопируйте этот код полностью:</b><br>
-        <small>В Genially выберите: <i>Insert -> Others -> Iframe / HTML</i> и вставьте код.</small>
-        <textarea id="codeResult" readonly></textarea>
-        <button onclick="copyToClipboard()" style="background: #2196F3; font-size: 14px; width: 100%;">📋 Скопировать код</button>
+    <div class="step" id="resultStep" style="display: none;">
+        <h3>2. Готово! Вставка в Genially</h3>
+        <p>Скопируйте этот код и в Genially выберите <b>Insert -> Other -> HTML</b></p>
+        <textarea id="outputCode" readonly></textarea>
+        <br><br>
+        <button id="copyBtn" style="background: #28a745; margin-bottom: 10px;">Скопировать код</button>
+        <button id="downloadBtn" style="background: #6c757d;">Скачать GIF файлом</button>
+
+        <h4 style="text-align:center; margin-top:20px;">Предпросмотр:</h4>
+        <div class="preview-area">
+            <img id="gifResult" src="" alt="Готовая GIF">
+        </div>
     </div>
 </div>
 
+<!-- Скрытые элементы для обработки видео -->
+<video id="hiddenVideo" style="display: none;" playsinline muted></video>
+<canvas id="hiddenCanvas" style="display: none;"></canvas>
+
 <script>
-    const videoUpload = document.getElementById('videoUpload');
-    const sourceVideo = document.getElementById('sourceVideo');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const videoInput = document.getElementById('videoInput');
     const processBtn = document.getElementById('processBtn');
+    const statusDiv = document.getElementById('status');
+    const resultStep = document.getElementById('resultStep');
+    const outputCode = document.getElementById('outputCode');
+    const gifResult = document.getElementById('gifResult');
+    const copyBtn = document.getElementById('copyBtn');
     const downloadBtn = document.getElementById('downloadBtn');
-    const geniallyBtn = document.getElementById('geniallyBtn');
-    const loading = document.getElementById('loading');
-    const resultGif = document.getElementById('resultGif');
-    const codeResult = document.getElementById('codeResult');
-    const actionButtons = document.getElementById('actionButtons');
-    const systemStatus = document.getElementById('systemStatus');
-    
-    let finalGifBlob = null;
-    let gifProcessor = null;
-    let isProcessing = false;
-    let localWorkerUrl = null;
+    const hiddenVideo = document.getElementById('hiddenVideo');
+    const hiddenCanvas = document.getElementById('hiddenCanvas');
+    const ctx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+    const toleranceSlider = document.getElementById('tolerance');
+    const tolValue = document.getElementById('tolValue');
 
-    // === ИСПРАВЛЕНИЕ ОШИБКИ 404 ДЛЯ ВОРКЕРА ===
-    // Загружаем скрипт в память браузера, чтобы он не искал его в файлах
-    fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js')
-        .then(response => response.text())
-        .then(scriptText => {
-            const blob = new Blob([scriptText], { type: 'application/javascript' });
-            localWorkerUrl = URL.createObjectURL(blob);
-            systemStatus.innerText = "✅ Система готова! Загрузите видео.";
-            systemStatus.style.color = "green";
-            videoUpload.disabled = false;
-        })
-        .catch(err => {
-            systemStatus.innerText = "❌ Ошибка загрузки компонентов. Проверьте интернет.";
-            systemStatus.style.color = "red";
-        });
+    let currentGifBase64 = '';
 
-    // 1. Загрузка видео
-    videoUpload.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        sourceVideo.src = URL.createObjectURL(file);
-        sourceVideo.style.display = 'inline-block';
-        actionButtons.style.display = 'block';
-        processBtn.style.display = 'inline-block';
-        
-        resultGif.style.display = 'none';
-        document.getElementById('embedSection').style.display = 'none';
-        downloadBtn.style.display = 'none';
-        geniallyBtn.style.display = 'none';
-        processBtn.disabled = false;
-    });
+    // Обновление значения ползунка
+    toleranceSlider.addEventListener('input', (e) => tolValue.innerText = e.target.value);
 
-    // Инициализация ИИ MediaPipe с фиксацией версии
-    const selfieSegmentation = new SelfieSegmentation({locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1/${file}`;
-    }});
-    selfieSegmentation.setOptions({ modelSelection: 1 });
-
-    // Обработка кадра нейросетью
-    selfieSegmentation.onResults((results) => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Рисуем маску (силуэт человека)
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.drawImage(results.segmentationMask, 0, 0, canvas.width, canvas.height);
-
-        // Накладываем видео только туда, где маска
-        ctx.globalCompositeOperation = 'source-in';
-        ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-        
-        // Добавляем готовый прозрачный кадр в GIF (10 FPS)
-        if (gifProcessor && isProcessing) {
-            gifProcessor.addFrame(ctx, {copy: true, delay: 100});
-        }
-    });
-
-    // 2. Кнопка "Удалить фон и сделать GIF"
     processBtn.addEventListener('click', async () => {
-        if (!localWorkerUrl) {
-            alert("Подождите, компоненты еще загружаются...");
-            return;
-        }
-
-        isProcessing = true;
-        loading.style.display = 'block';
-        processBtn.disabled = true;
-        sourceVideo.style.display = 'none';
-
-        // Сжимаем видео
-        canvas.width = 320; 
-        canvas.height = (sourceVideo.videoHeight / sourceVideo.videoWidth) * 320;
-
-        // Настройка генератора GIF
-        gifProcessor = new GIF({
-            workers: 2,
-            quality: 10,
-            width: canvas.width,
-            height: canvas.height,
-            transparent: "rgba(0,0,0,0)",
-            workerScript: localWorkerUrl // ИСПОЛЬЗУЕМ ЗАГРУЖЕННЫЙ В ПАМЯТЬ ВОРКЕР
-        });
-
-        sourceVideo.currentTime = 0;
-        sourceVideo.play();
-        sourceVideo.muted = true;
-
-        const processFrames = async () => {
-            if (!sourceVideo.paused && !sourceVideo.ended) {
-                await selfieSegmentation.send({image: sourceVideo});
-                requestAnimationFrame(processFrames);
-            } else {
-                isProcessing = false;
-                gifProcessor.render(); // Запуск сборки
-            }
-        };
-
-        // Небольшая задержка перед стартом обработки
-        setTimeout(processFrames, 500);
-
-        // Когда GIF собрана
-        gifProcessor.on('finished', function(blob) {
-            finalGifBlob = blob;
-            const gifUrl = URL.createObjectURL(blob);
-            resultGif.src = gifUrl;
-            resultGif.style.display = 'inline-block';
-            
-            loading.style.display = 'none';
-            downloadBtn.style.display = 'inline-block';
-            geniallyBtn.style.display = 'inline-block';
-            processBtn.style.display = 'none';
-        });
-    });
-
-    // 3. Кнопка "Скачать GIF"
-    downloadBtn.addEventListener('click', () => {
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(finalGifBlob);
-        link.download = 'transparent_video.gif';
-        link.click();
-    });
-
-    // 4. Кнопка "Получить Base64-код"
-    geniallyBtn.addEventListener('click', () => {
-        geniallyBtn.innerText = "⏳ Генерация кода...";
-        geniallyBtn.disabled = true;
-
-        const reader = new FileReader();
-        reader.readAsDataURL(finalGifBlob);
+        if (!videoInput.files.length) return alert('Сначала загрузите видео!');
         
-        reader.onloadend = function() {
-            const base64data = reader.result;
-            const htmlCode = `<img src="${base64data}" style="width: 100%; height: auto; background: transparent;" alt="Transparent Video">`;
+        const file = videoInput.files[0];
+        const fileURL = URL.createObjectURL(file);
+        
+        processBtn.disabled = true;
+        statusDiv.style.display = 'block';
+        statusDiv.innerText = 'Подготовка видео...';
+        resultStep.style.display = 'none';
+
+        hiddenVideo.src = fileURL;
+        
+        hiddenVideo.onloadedmetadata = async () => {
+            // Сжатие видео для Genially (макс ширина 250px)
+            const MAX_WIDTH = 250;
+            let width = hiddenVideo.videoWidth;
+            let height = hiddenVideo.videoHeight;
             
-            document.getElementById('embedSection').style.display = 'block';
-            codeResult.value = htmlCode;
-            
-            geniallyBtn.innerText = "3. Получить Base64-код для Genially";
-            geniallyBtn.disabled = false;
-        }
+            if (width > MAX_WIDTH) {
+                height = Math.floor(height * (MAX_WIDTH / width));
+                width = MAX_WIDTH;
+            }
+
+            hiddenCanvas.width = width;
+            hiddenCanvas.height = height;
+
+            // Настройки извлечения кадров
+            const duration = hiddenVideo.duration;
+            const fps = 10; // Снижаем FPS для сжатия
+            const totalFrames = Math.floor(duration * fps);
+            const framesArray = [];
+            const tolerance = parseInt(toleranceSlider.value);
+
+            statusDiv.innerText = `Обработка кадров (0 / ${totalFrames})...`;
+
+            for (let i = 0; i <= totalFrames; i++) {
+                const time = i / fps;
+                await seekVideo(hiddenVideo, time);
+                
+                // Рисуем кадр
+                ctx.drawImage(hiddenVideo, 0, 0, width, height);
+                let frameData = ctx.getImageData(0, 0, width, height);
+                let data = frameData.data;
+
+                // Определяем цвет фона по левому верхнему пикселю
+                let bgR = data[0], bgG = data[1], bgB = data[2];
+
+                // Процесс Хромакея (Удаление фона)
+                for (let j = 0; j < data.length; j += 4) {
+                    let r = data[j], g = data[j+1], b = data[j+2];
+                    // Вычисляем разницу цветов
+                    let diff = Math.sqrt(Math.pow(r - bgR, 2) + Math.pow(g - bgG, 2) + Math.pow(b - bgB, 2));
+                    
+                    if (diff < tolerance) {
+                        data[j+3] = 0; // Делаем пиксель прозрачным
+                    }
+                }
+
+                ctx.putImageData(frameData, 0, 0);
+                framesArray.push(hiddenCanvas.toDataURL('image/png'));
+                statusDiv.innerText = `Обработка кадров (${i} / ${totalFrames})...`;
+            }
+
+            statusDiv.innerText = 'Сборка GIF... Это займет немного времени.';
+
+            // Создаем GIF
+            gifshot.createGIF({
+                images: framesArray,
+                gifWidth: width,
+                gifHeight: height,
+                interval: 1 / fps,
+                transparentHex: 'rgba(0,0,0,0)' // Поддержка прозрачности
+            }, function(obj) {
+                if(!obj.error) {
+                    currentGifBase64 = obj.image;
+                    
+                    // Формируем HTML код для Genially
+                    const geniallyCode = `<img src="${currentGifBase64}" style="width:100%; height:auto; background:transparent;" alt="gif">`;
+                    
+                    outputCode.value = geniallyCode;
+                    gifResult.src = currentGifBase64;
+                    
+                    statusDiv.style.display = 'none';
+                    resultStep.style.display = 'block';
+                } else {
+                    alert("Ошибка при создании GIF");
+                    statusDiv.style.display = 'none';
+                }
+                processBtn.disabled = false;
+            });
+        };
     });
 
-    // Функция быстрого копирования
-    function copyToClipboard() {
-        codeResult.select();
-        document.execCommand('copy');
-        alert("✅ Код скопирован! Теперь вставьте его в Genially");
+    // Функция для перемотки видео до нужного кадра
+    function seekVideo(video, time) {
+        return new Promise((resolve) => {
+            video.currentTime = time;
+            video.addEventListener('seeked', function onSeeked() {
+                video.removeEventListener('seeked', onSeeked);
+                resolve();
+            });
+        });
     }
+
+    // Копирование кода
+    copyBtn.addEventListener('click', () => {
+        outputCode.select();
+        document.execCommand('copy');
+        copyBtn.innerText = '✓ Скопировано!';
+        setTimeout(() => copyBtn.innerText = 'Скопировать код', 2000);
+    });
+
+    // Скачивание
+    downloadBtn.addEventListener('click', () => {
+        const a = document.createElement('a');
+        a.href = currentGifBase64;
+        a.download = 'transparent.gif';
+        a.click();
+    });
 </script>
 
 </body>
